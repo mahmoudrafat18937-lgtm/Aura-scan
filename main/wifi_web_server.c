@@ -12,6 +12,7 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_http_server.h"
+#include "mdns.h" // مكتبة الـ mDNS المضافة
 
 #include "wifi_web_server.h"
 
@@ -111,8 +112,8 @@ static esp_err_t root_handler(httpd_req_t *req)
         "<body>"
 
         "<h1>"
-        "Dr. Maker<br>"
-        "CSI Radar"
+        "AuraScan<br>"
+        "Room Activity Monitor"
         "</h1>"
 
         "<div id='status'>NO MOTION</div>"
@@ -140,13 +141,13 @@ static esp_err_t root_handler(httpd_req_t *req)
         "}catch(e){}"
         "}"
         "async function resetWifi(){"
-        "if(!confirm('Reset Wi-Fi settings? DrWalls will restart in setup mode.'))return;"
+        "if(!confirm('Reset Wi-Fi settings? AuraScan will restart in setup mode.'))return;"
         "try{"
         "document.getElementById('resetWifi').textContent='RESETTING...';"
         "await fetch('/api/reset-wifi',{method:'POST'});"
         "document.body.classList.remove('motion-active');"
         "document.getElementById('status').textContent='WI-FI RESET';"
-        "alert('Wi-Fi settings erased. Connect to DrWalls-Setup to configure a new network.');"
+        "alert('Wi-Fi settings erased. Connect to AuraScan-Setup to configure a new network.');"
         "}catch(e){}"
         "}"
         "setInterval(update,250);"
@@ -213,10 +214,6 @@ static esp_err_t reset_wifi_handler(httpd_req_t *req)
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"success\":true}");
 
-    /*
-     * Give the HTTP response time to reach the browser
-     * before restarting the ESP32.
-     */
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     esp_restart();
@@ -230,6 +227,16 @@ esp_err_t wifi_web_server_start(
 {
     s_fsm = fsm;
     memcpy(s_ap_mac, ap_mac, 6);
+
+    // تفعيل الـ mDNS مباشرة عند تشغيل السيرفر
+    esp_err_t mdns_err = mdns_init();
+    if (mdns_err == ESP_OK) {
+        mdns_hostname_set("aurascan");
+        mdns_instance_name_set("AuraScan Room Monitor");
+        ESP_LOGI(TAG, "mDNS initialized: http://aurascan.local");
+    } else {
+        ESP_LOGW(TAG, "mDNS initialization failed: %s", esp_err_to_name(mdns_err));
+    }
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 
